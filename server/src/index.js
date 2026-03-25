@@ -20,9 +20,34 @@ if (!mongoUri) {
   throw new Error("MONGODB_URI is required in environment variables.");
 }
 
+function normalizeOrigin(origin) {
+  if (typeof origin !== "string") {
+    return "";
+  }
+
+  return origin.trim().replace(/\/+$/, "");
+}
+
+const allowedOrigins = allowedOrigin
+  .split(",")
+  .map((item) => normalizeOrigin(item))
+  .filter(Boolean);
+
+const allowAllOrigins = allowedOrigins.includes("*");
+
 app.use(
   cors({
-    origin: allowedOrigin,
+    origin: (requestOrigin, callback) => {
+      if (!requestOrigin || allowAllOrigins) {
+        callback(null, true);
+        return;
+      }
+
+      const normalizedRequestOrigin = normalizeOrigin(requestOrigin);
+      const isAllowed = allowedOrigins.includes(normalizedRequestOrigin);
+
+      callback(isAllowed ? null : new Error("Origin not allowed by CORS"), isAllowed);
+    },
   })
 );
 app.use(express.json());
