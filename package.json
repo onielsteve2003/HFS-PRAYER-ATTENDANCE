@@ -1,0 +1,16 @@
+{
+  "name": "hfs-prayer-attendance",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "server:install": "npm install --prefix server",
+    "client:install": "npm install --prefix client",
+    "server:dev": "npm run dev --prefix server",
+    "server:start": "npm run start --prefix server",
+    "client:dev": "npm run dev --prefix client",
+    "dev": "concurrently \"npm run server:dev\" \"npm run client:dev\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
