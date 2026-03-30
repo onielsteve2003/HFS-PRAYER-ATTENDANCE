@@ -6,6 +6,13 @@ const nameInput = document.getElementById("name");
 const statusBanner = document.getElementById("status-banner");
 const historyEl = document.getElementById("history");
 const serverTimeEl = document.getElementById("server-time");
+const pageSizeSelect = document.getElementById("page-size");
+const prevPageButton = document.getElementById("prev-page");
+const nextPageButton = document.getElementById("next-page");
+const historySummaryEl = document.getElementById("history-summary");
+
+let historyGroups = [];
+let currentPage = 1;
 
 function createDeviceToken() {
   const source = `${crypto.randomUUID()}-${Date.now()}-${navigator.userAgent}`;
@@ -33,13 +40,44 @@ function setFormEnabled(enabled) {
   attendanceForm.querySelector("button").disabled = !enabled;
 }
 
-function renderHistory(groups) {
-  if (!Array.isArray(groups) || groups.length === 0) {
+function getPageSizeValue() {
+  const selected = pageSizeSelect.value;
+  if (selected === "all") {
+    return Math.max(historyGroups.length, 1);
+  }
+
+  return Number(selected);
+}
+
+function getTotalPages() {
+  const pageSize = getPageSizeValue();
+  return Math.max(1, Math.ceil(historyGroups.length / pageSize));
+}
+
+function renderHistory() {
+  if (!Array.isArray(historyGroups) || historyGroups.length === 0) {
     historyEl.innerHTML = '<p class="empty">No attendance records yet.</p>';
+    historySummaryEl.textContent = "No records";
+    prevPageButton.disabled = true;
+    nextPageButton.disabled = true;
     return;
   }
 
-  historyEl.innerHTML = groups
+  const totalPages = getTotalPages();
+  if (currentPage > totalPages) {
+    currentPage = totalPages;
+  }
+
+  const pageSize = getPageSizeValue();
+  const start = (currentPage - 1) * pageSize;
+  const end = start + pageSize;
+  const visibleGroups = historyGroups.slice(start, end);
+
+  historySummaryEl.textContent = `Page ${currentPage} of ${totalPages} (${historyGroups.length} days)`;
+  prevPageButton.disabled = currentPage === 1;
+  nextPageButton.disabled = currentPage === totalPages;
+
+  historyEl.innerHTML = visibleGroups
     .map((group) => {
       const names = group.attendees
         .map((name) => `<li>${escapeHtml(name)}</li>`)
@@ -62,8 +100,8 @@ async function loadHistory() {
     throw new Error("Could not load attendance history.");
   }
 
-  const data = await res.json();
-  renderHistory(data);
+  historyGroups = await res.json();
+  renderHistory();
 }
 
 async function loadStatus() {
@@ -140,6 +178,26 @@ attendanceForm.addEventListener("submit", async (event) => {
   } catch (error) {
     setBanner(error.message || "Unexpected error.", "warn");
     setFormEnabled(true);
+  }
+});
+
+pageSizeSelect.addEventListener("change", () => {
+  currentPage = 1;
+  renderHistory();
+});
+
+prevPageButton.addEventListener("click", () => {
+  if (currentPage > 1) {
+    currentPage -= 1;
+    renderHistory();
+  }
+});
+
+nextPageButton.addEventListener("click", () => {
+  const totalPages = getTotalPages();
+  if (currentPage < totalPages) {
+    currentPage += 1;
+    renderHistory();
   }
 });
 

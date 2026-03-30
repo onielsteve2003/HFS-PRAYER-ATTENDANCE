@@ -77,6 +77,32 @@ h3 {
   gap: 0.65rem;
 }
 
+.history-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.8rem;
+}
+
+.history-controls select {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.45rem 0.6rem;
+  background: #fff;
+}
+
+.pager-buttons {
+  margin-left: auto;
+  display: flex;
+  gap: 0.4rem;
+}
+
+.pager-buttons button {
+  padding: 0.45rem 0.75rem;
+  font-size: 0.85rem;
+}
+
 input {
   width: 100%;
   border: 1px solid var(--border);
