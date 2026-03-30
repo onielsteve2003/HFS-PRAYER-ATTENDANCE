@@ -24,18 +24,14 @@
       <section class="card">
         <h2>Attendance History</h2>
         <div class="history-controls">
-          <label for="page-size">Show</label>
-          <select id="page-size">
+          <label for="preview-count">Preview names</label>
+          <select id="preview-count">
             <option value="5">5</option>
             <option value="20" selected>20</option>
             <option value="50">50</option>
             <option value="all">All</option>
           </select>
           <span id="history-summary" class="muted"></span>
-          <div class="pager-buttons">
-            <button id="prev-page" type="button">Previous</button>
-            <button id="next-page" type="button">Next</button>
-          </div>
         </div>
         <div id="history" class="history"></div>
       </section>

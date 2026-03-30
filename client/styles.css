@@ -92,15 +92,8 @@ h3 {
   background: #fff;
 }
 
-.pager-buttons {
+.history-controls .muted {
   margin-left: auto;
-  display: flex;
-  gap: 0.4rem;
-}
-
-.pager-buttons button {
-  padding: 0.45rem 0.75rem;
-  font-size: 0.85rem;
 }
 
 input {
@@ -136,6 +129,10 @@ button:disabled {
 .history-item ol {
   margin: 0.5rem 0 0;
   padding-left: 1.25rem;
+}
+
+.history-item .more-note {
+  margin-top: 0.5rem;
 }
 
 .empty {
