@@ -305,22 +305,36 @@ app.post("/api/attendance", async (req, res, next) => {
 
     const candidateMembers = [...candidateMembersMap.values()];
 
-    const existingMemberByConflict = candidateMembers.find((member) => {
-      if (!member?.name) {
+    const hasExactExistingMember = candidateMembers.some((member) => {
+      if (!member) {
         return false;
       }
 
-      const sameExactNormalized = normalizeName(member.name) === normalized;
-      if (sameExactNormalized) {
-        return false;
-      }
-
-      if (member.nameKey === nameKey) {
+      if (member.normalizedName === normalized) {
         return true;
       }
 
-      return isLikelySamePersonName(cleanedName, member.name);
+      return normalizeName(member.name || "") === normalized;
     });
+
+    const existingMemberByConflict = hasExactExistingMember
+      ? null
+      : candidateMembers.find((member) => {
+          if (!member?.name) {
+            return false;
+          }
+
+          const sameExactNormalized = normalizeName(member.name) === normalized;
+          if (sameExactNormalized) {
+            return false;
+          }
+
+          if (member.nameKey === nameKey) {
+            return true;
+          }
+
+          return isLikelySamePersonName(cleanedName, member.name);
+        });
 
     if (existingMemberByConflict) {
       res.status(409).json({
