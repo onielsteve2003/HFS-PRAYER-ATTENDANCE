@@ -22,7 +22,7 @@ function getFormatter(timeZone) {
   });
 }
 
-function getTimeParts(date, timeZone) {
+export function getTimeParts(date, timeZone) {
   const parts = getFormatter(timeZone).formatToParts(date);
   const value = {};
 
@@ -43,7 +43,7 @@ function getTimeParts(date, timeZone) {
   };
 }
 
-function getDateOnlyForSession(date, timeZone) {
+export function getDateOnlyForSession(date, timeZone) {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone,
     year: "numeric",

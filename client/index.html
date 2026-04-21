@@ -4,36 +4,90 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>HFS Prayer Attendance</title>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"
+      integrity="sha512-Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg=="
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <main class="page">
       <section class="card">
         <h1>HFS Prayer Attendance</h1>
+        <aside class="attention-guide" role="note" aria-label="Attendance instructions">
+          <p class="attention-guide-title">
+            <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+            New attendance flow: Please read first
+          </p>
+          <ol>
+            <li>Search or scroll down to select your name from the list.</li>
+            <li>Click <strong>Mark Present</strong> once on your name.</li>
+            <li>If your name is not listed, click <strong>Add New Member</strong>.</li>
+            <li>Use the register table below to track each Tuesday/Thursday (✔ present, ✗ absent).</li>
+          </ol>
+          <p class="attention-guide-note">
+            One device can submit only one attendance per session.
+          </p>
+        </aside>
         <p id="server-time" class="muted"></p>
 
         <div id="status-banner" class="status-banner"></div>
 
-        <form id="attendance-form" class="form" autocomplete="off">
-          <label for="name">Enter your name</label>
-          <input id="name" name="name" type="text" maxlength="60" placeholder="e.g. Esther Johnson" required />
-          <button type="submit">Submit Attendance</button>
-        </form>
+        <div id="checkin-section" style="display: none">
+          <div class="search-box">
+            <input
+              id="member-search"
+              type="text"
+              placeholder="Search your name..."
+              autocomplete="off"
+            />
+          </div>
+
+          <div id="member-list" class="member-list"></div>
+
+          <div class="add-member-section">
+            <button id="toggle-add-member" type="button" class="btn-secondary">
+              + Add New Member
+            </button>
+            <div id="add-member-form">
+              <input
+                id="new-member-name"
+                type="text"
+                maxlength="60"
+                placeholder="Enter your full name"
+                autocomplete="off"
+              />
+              <button id="add-member-btn" type="button">Add &amp; Mark Present</button>
+            </div>
+          </div>
+        </div>
       </section>
 
       <section class="card">
-        <h2>Attendance History</h2>
+        <h2>Attendance Register</h2>
         <div class="history-controls">
-          <label for="preview-count">Preview names</label>
-          <select id="preview-count">
-            <option value="5">5</option>
-            <option value="20" selected>20</option>
-            <option value="50">50</option>
+          <select id="year-select" aria-label="Year"></select>
+          <select id="month-select" aria-label="Month"></select>
+          <input
+            id="history-search"
+            type="text"
+            placeholder="Search names..."
+            autocomplete="off"
+          />
+          <select id="status-filter" aria-label="Status filter">
             <option value="all">All</option>
+            <option value="present">Present only</option>
+            <option value="absent">Absent only</option>
           </select>
-          <span id="history-summary" class="muted"></span>
+          <select id="status-date-filter" aria-label="Status date filter" disabled>
+            <option value="all">All dates</option>
+          </select>
         </div>
         <div id="history" class="history"></div>
+        <div id="consistency" class="consistency"></div>
       </section>
     </main>
 
