@@ -18,6 +18,7 @@ const deviceHashSalt = process.env.DEVICE_HASH_SALT || "dev-salt-change-me";
 const allowedOrigin = process.env.ALLOWED_ORIGIN || "*";
 const attendanceForceOpen = process.env.ATTENDANCE_FORCE_OPEN === "true";
 const attendanceNoPersist = process.env.ATTENDANCE_NO_PERSIST === "true";
+const adminCorrectionToken = process.env.ADMIN_CORRECTION_TOKEN || "";
 
 // In-memory test-only storage. Cleared on server restart.
 const testSessionEntries = new Map();
@@ -109,6 +110,50 @@ function getOrCreateMap(store, key) {
     store.set(key, new Map());
   }
   return store.get(key);
+}
+
+function isValidDateOnly(value) {
+  if (typeof value !== "string") {
+    return false;
+  }
+
+  const trimmed = value.trim();
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+  if (!match) {
+    return false;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
+}
+
+async function resolveMemberIdentity(name) {
+  const normalized = normalizeName(name);
+  const nameKey = buildNameKey(name);
+
+  const exact = await Member.findOne(
+    {
+      $or: [{ normalizedName: normalized }, { nameKey }],
+    },
+    { name: 1, normalizedName: 1, nameKey: 1, _id: 0 }
+  ).lean();
+
+  if (exact) {
+    return exact;
+  }
+
+  const candidates = await Member.find({}, { name: 1, normalizedName: 1, nameKey: 1, _id: 0 }).lean();
+  const fuzzy = candidates.find((candidate) => isLikelySamePersonName(name, candidate.name));
+
+  return fuzzy || null;
 }
 
 async function closePastSessions() {
@@ -630,6 +675,165 @@ app.get("/api/attendance", async (req, res, next) => {
       availableMonths,
     });
   } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/admin/attendance-corrections", async (req, res, next) => {
+  try {
+    if (attendanceNoPersist) {
+      res.status(400).json({
+        message: "Manual attendance correction is available only when ATTENDANCE_NO_PERSIST=false.",
+      });
+      return;
+    }
+
+    if (!adminCorrectionToken) {
+      res.status(503).json({
+        message: "ADMIN_CORRECTION_TOKEN is not configured.",
+      });
+      return;
+    }
+
+    const providedToken = req.headers["x-admin-token"];
+    if (typeof providedToken !== "string" || providedToken !== adminCorrectionToken) {
+      res.status(401).json({ message: "Unauthorized correction request." });
+      return;
+    }
+
+    const { dateOnly, name, names, status } = req.body ?? {};
+    const targetStatus = status === "absent" ? "absent" : "present";
+
+    if (!isValidDateOnly(dateOnly)) {
+      res.status(400).json({ message: "dateOnly must be a valid YYYY-MM-DD date." });
+      return;
+    }
+
+    const resolvedNames = Array.isArray(names)
+      ? names.filter((item) => typeof item === "string" && item.trim())
+      : typeof name === "string" && name.trim()
+        ? [name]
+        : [];
+
+    if (resolvedNames.length === 0) {
+      res.status(400).json({ message: "Provide name or names for correction." });
+      return;
+    }
+
+    const sessionSample = await Attendance.findOne(
+      { dateOnly },
+      { sessionKey: 1, sessionLabel: 1, _id: 0 }
+    ).lean();
+
+    if (!sessionSample) {
+      res.status(404).json({ message: `No attendance session found for ${dateOnly}.` });
+      return;
+    }
+
+    const results = [];
+
+    for (const rawName of resolvedNames) {
+      const cleanedName = rawName.trim().replace(/\s+/g, " ");
+      const identity = await resolveMemberIdentity(cleanedName);
+
+      if (!identity) {
+        results.push({
+          input: cleanedName,
+          success: false,
+          message: "Member not found. Ask member to use exact registered name.",
+        });
+        continue;
+      }
+
+      const targetQuery = {
+        sessionKey: sessionSample.sessionKey,
+        $or: [
+          { normalizedName: identity.normalizedName },
+          { normalizedNameKey: identity.nameKey },
+        ],
+      };
+
+      const existing = await Attendance.findOne(targetQuery).lean();
+
+      if (existing?.status === "present") {
+        results.push({
+          input: cleanedName,
+          resolvedName: identity.name,
+          success: true,
+          message:
+            targetStatus === "present"
+              ? "Already marked present."
+              : "Already marked present. Use another correction if this should be absent.",
+        });
+        if (targetStatus === "present") {
+          continue;
+        }
+      }
+
+      if (existing) {
+        await Attendance.updateOne(
+          { _id: existing._id },
+          {
+            $set: {
+              status: targetStatus,
+              name: identity.name,
+              normalizedName: identity.normalizedName,
+              normalizedNameKey: identity.nameKey,
+            },
+          }
+        );
+
+        results.push({
+          input: cleanedName,
+          resolvedName: identity.name,
+          success: true,
+          message:
+            targetStatus === "present"
+              ? "Updated from absent to present."
+              : "Updated from present to absent.",
+        });
+        continue;
+      }
+
+      await Attendance.create({
+        sessionKey: sessionSample.sessionKey,
+        sessionLabel: sessionSample.sessionLabel,
+        dateOnly,
+        name: identity.name,
+        normalizedName: identity.normalizedName,
+        normalizedNameKey: identity.nameKey,
+        deviceHash: null,
+        status: targetStatus,
+      });
+
+      results.push({
+        input: cleanedName,
+        resolvedName: identity.name,
+        success: true,
+        message:
+          targetStatus === "present"
+            ? "Created present attendance record."
+            : "Created absent attendance record.",
+      });
+    }
+
+    res.json({
+      dateOnly,
+      status: targetStatus,
+      sessionKey: sessionSample.sessionKey,
+      processed: results.length,
+      succeeded: results.filter((item) => item.success).length,
+      failed: results.filter((item) => !item.success).length,
+      results,
+    });
+  } catch (error) {
+    if (error?.code === 11000) {
+      res.status(409).json({
+        message: "A conflicting attendance record already exists for one of the names.",
+      });
+      return;
+    }
+
     next(error);
   }
 });

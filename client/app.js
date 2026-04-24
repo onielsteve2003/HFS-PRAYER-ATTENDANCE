@@ -17,6 +17,7 @@ const statusFilterSelect = document.getElementById("status-filter");
 const statusDateFilterSelect = document.getElementById("status-date-filter");
 const historyEl = document.getElementById("history");
 const consistencyEl = document.getElementById("consistency");
+const isAdminChangePage = window.location.pathname.replace(/\/+$/, "") === "/admin/change";
 
 let currentStatus = null;
 let members = [];
@@ -250,6 +251,136 @@ async function fetchAttendance(params = {}) {
   const res = await fetch(`${API_BASE}/attendance?${query}`);
   if (!res.ok) throw new Error("Could not load attendance history.");
   return res.json();
+}
+
+function renderAdminChangePage() {
+  document.body.innerHTML = `
+    <main class="page admin-page">
+      <section class="card admin-card">
+        <h1>Attendance Admin Change</h1>
+        <p class="muted">Select person, past date, and new status. This updates attendance records directly.</p>
+
+        <div class="admin-form-grid">
+          <label>
+            Admin Token
+            <input id="admin-token" type="password" placeholder="Enter ADMIN_CORRECTION_TOKEN" autocomplete="off" />
+          </label>
+
+          <label>
+            Person
+            <input id="admin-name" list="admin-member-options" placeholder="Select or type member name" autocomplete="off" />
+            <datalist id="admin-member-options"></datalist>
+          </label>
+
+          <label>
+            Past Date
+            <select id="admin-date">
+              <option value="">Select date</option>
+            </select>
+          </label>
+
+          <label>
+            Change Status To
+            <select id="admin-status">
+              <option value="present">Present</option>
+              <option value="absent">Absent</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="admin-actions">
+          <button id="admin-submit" type="button">Apply Change</button>
+          <a class="admin-back-link" href="/">Back to attendance</a>
+        </div>
+
+        <pre id="admin-result" class="admin-result">Waiting for input...</pre>
+      </section>
+    </main>
+  `;
+}
+
+async function initAdminChangePage() {
+  renderAdminChangePage();
+
+  const tokenInput = document.getElementById("admin-token");
+  const nameInput = document.getElementById("admin-name");
+  const nameOptions = document.getElementById("admin-member-options");
+  const dateSelect = document.getElementById("admin-date");
+  const statusSelect = document.getElementById("admin-status");
+  const submitBtn = document.getElementById("admin-submit");
+  const resultEl = document.getElementById("admin-result");
+
+  try {
+    const [status, membersPayload, attendancePayload] = await Promise.all([
+      fetchStatus(),
+      fetchMembers(),
+      fetchAttendance(),
+    ]);
+
+    const memberNames = [...new Set(membersPayload.map((member) => member.name))].sort((a, b) =>
+      a.localeCompare(b)
+    );
+    nameOptions.innerHTML = memberNames
+      .map((name) => `<option value="${escapeHtml(name)}"></option>`)
+      .join("");
+
+    const todayDateOnly = status?.dateOnly || null;
+    const pastDates = [...new Set(attendancePayload.sessions.map((session) => session.dateOnly))]
+      .filter((dateOnly) => (todayDateOnly ? dateOnly < todayDateOnly : true))
+      .sort((a, b) => b.localeCompare(a));
+
+    dateSelect.innerHTML = [
+      '<option value="">Select date</option>',
+      ...pastDates.map(
+        (dateOnly) =>
+          `<option value="${dateOnly}">${escapeHtml(formatShortPrayerDateLabel(dateOnly))} (${escapeHtml(dateOnly)})</option>`
+      ),
+    ].join("");
+
+    if (pastDates.length === 0) {
+      resultEl.textContent = "No past attendance dates found yet.";
+    }
+  } catch (error) {
+    resultEl.textContent = `Failed to load admin options: ${error.message || error}`;
+  }
+
+  submitBtn.addEventListener("click", async () => {
+    const token = tokenInput.value.trim();
+    const name = nameInput.value.trim();
+    const dateOnly = dateSelect.value;
+    const status = statusSelect.value;
+
+    if (!token || !name || !dateOnly) {
+      resultEl.textContent = "Please provide admin token, person name, and date.";
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Applying...";
+
+    try {
+      const res = await fetch(`${API_BASE}/admin/attendance-corrections`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-token": token,
+        },
+        body: JSON.stringify({
+          dateOnly,
+          name,
+          status,
+        }),
+      });
+
+      const payload = await res.json();
+      resultEl.textContent = JSON.stringify(payload, null, 2);
+    } catch (error) {
+      resultEl.textContent = `Correction failed: ${error.message || error}`;
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Apply Change";
+    }
+  });
 }
 
 function renderCheckin() {
@@ -794,18 +925,22 @@ async function init() {
   }
 }
 
-setInterval(async () => {
-  try {
-    currentStatus = await fetchStatus();
-    serverTimeEl.textContent = `Server time: ${currentStatus.serverTime}`;
-    renderCheckin();
-  } catch (_) {}
-}, 30000);
+if (isAdminChangePage) {
+  initAdminChangePage();
+} else {
+  setInterval(async () => {
+    try {
+      currentStatus = await fetchStatus();
+      serverTimeEl.textContent = `Server time: ${currentStatus.serverTime}`;
+      renderCheckin();
+    } catch (_) {}
+  }, 30000);
 
-setInterval(async () => {
-  try {
-    await loadHistory();
-  } catch (_) {}
-}, 60000);
+  setInterval(async () => {
+    try {
+      await loadHistory();
+    } catch (_) {}
+  }, 60000);
 
-init();
+  init();
+}
